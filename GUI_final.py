@@ -1,28 +1,21 @@
 import numpy as np
 import pandas as pd
+import re
+import string
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.model_selection import train_test_split  
-from sklearn.metrics import accuracy_score 
-from sklearn.metrics import confusion_matrix
-from sklearn. metrics import classification_report, roc_auc_score, roc_curve
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, roc_auc_score, roc_curve
 import pickle
 import streamlit as st
 import matplotlib.pyplot as plt
-from sklearn import metrics
 import seaborn as sns
 import altair as alt
 from wordcloud import WordCloud
 import nltk
-from underthesea import word_tokenize
-from underthesea import text_normalize
-import string
-
+from underthesea import word_tokenize, text_normalize
 import squarify
-
 import joblib
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import train_test_split
 # ---------------------------
 uploaded_file_rs = pd.read_csv("data/df_res.csv")
 df_rev1 = pd.read_csv("data/df_rev1.csv")
