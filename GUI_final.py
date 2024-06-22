@@ -32,8 +32,8 @@ joblib_file = "logistic_regression_model.pkl"
 # Load the model from the file
 loaded_model = joblib.load(joblib_file)
 # Convert the text data to numerical vectors
-vectorizer = TfidfVectorizer(analyzer='word', min_df=0, stop_words=stopwords_lst)
-vectorizer.fit_transform(df_PNR['Comment'].tolist())
+#vectorizer = TfidfVectorizer(analyzer='word', min_df=0, stop_words=stopwords_lst)
+#vectorizer.fit_transform(df_PNR['Comment'].tolist())
 
 level_extreme_words = [
     "rất", "khủng khiếp", "quá", "siêu", "cực kỳ", "rất nhiều", "vô cùng", "tuyệt đối", "hoàn toàn",
@@ -633,7 +633,7 @@ elif choice == 'Thống kê cửa hàng':
 
 
 
-elif choice == 'Dự đoán ngữ nghĩa':
+'''elif choice == 'Dự đoán ngữ nghĩa':
     st.subheader("Dự đoán ngữ nghĩa")
     selected_text = st.text_input(label = "Nhập cảm nghĩ của quý khách: ")
     if selected_text:
@@ -647,4 +647,4 @@ elif choice == 'Dự đoán ngữ nghĩa':
         # Map numerical labels back to sentiment labels
         label_map = {1: 'Hài lòng', 0: 'Không hài lòng'}
         predicted_labels = label_map[predictions[0]]
-        st.write(predicted_labels)
+        st.write(predicted_labels)'''
