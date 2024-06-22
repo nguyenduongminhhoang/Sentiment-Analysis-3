@@ -16,6 +16,7 @@ from wordcloud import WordCloud
 import nltk
 from underthesea import word_tokenize
 from underthesea import text_normalize
+import string
 
 import squarify
 
