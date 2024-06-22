@@ -32,7 +32,7 @@ joblib_file = "logistic_regression_model.pkl"
 # Load the model from the file
 loaded_model = joblib.load(joblib_file)
 # Convert the text data to numerical vectors
-vectorizer = TfidfVectorizer(analyzer='word', min_df=0, stop_words=stopwords_lst)
+vectorizer = TfidfVectorizer(analyzer='word', min_df=0.0, stop_words=stopwords_lst)
 vectorizer.fit_transform(df_PNR['Comment'].tolist())
 
 level_extreme_words = [
