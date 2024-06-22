@@ -14,7 +14,6 @@ import seaborn as sns
 import altair as alt
 from wordcloud import WordCloud
 import nltk
-import string
 from underthesea import word_tokenize
 from underthesea import text_normalize
 
