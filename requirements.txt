@@ -1,13 +1,13 @@
-altair
-joblib
+altair == 5.3.0
+joblib == 1.2.0
 matplotlib
-nltk
+nltk == 3.7
 numpy
 pandas
-regex
-scikit-learn
+regex == 2022.9.13
+scikit-learn == 1.1.2
 seaborn
-streamlit
-squarify
-underthesea
-wordcloud
+streamlit == 1.35.0
+squarify == 0.4.3
+underthesea == 6.8.0
+wordcloud == 1.8.2.2
