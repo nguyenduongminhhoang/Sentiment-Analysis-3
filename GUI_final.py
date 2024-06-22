@@ -1,20 +1,17 @@
-import numpy as np
-import pandas as pd
 import re
 import string
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report, roc_auc_score, roc_curve
-import pickle
+import pandas as pd
+import numpy as np
 import streamlit as st
-import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.pyplot as plt
 import altair as alt
 from wordcloud import WordCloud
-import nltk
-from underthesea import word_tokenize, text_normalize
 import squarify
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+import nltk
+from underthesea import word_tokenize
 import joblib
 # ---------------------------
 uploaded_file_rs = pd.read_csv("data/df_res.csv")
@@ -32,8 +29,8 @@ joblib_file = "logistic_regression_model.pkl"
 # Load the model from the file
 loaded_model = joblib.load(joblib_file)
 # Convert the text data to numerical vectors
-#vectorizer = TfidfVectorizer(analyzer='word', min_df=0, stop_words=stopwords_lst)
-#vectorizer.fit_transform(df_PNR['Comment'].tolist())
+vectorizer = TfidfVectorizer(analyzer='word', min_df=0, stop_words=stopwords_lst)
+vectorizer.fit_transform(df_PNR['Comment'].tolist())
 
 level_extreme_words = [
     "rất", "khủng khiếp", "quá", "siêu", "cực kỳ", "rất nhiều", "vô cùng", "tuyệt đối", "hoàn toàn",
@@ -235,91 +232,70 @@ store_words = [
 deliver_words = [
     "giao hàng", "giao", 'grab', "be", "shopee", "tốc độ", "ship", "đúng hẹn", "đúng giờ", "địa chỉ"
 ]
-# ---------------------------
-# function to classify the content of comment into neutral, positive, negative
-def find_words_count(document, list_of_words):
-    document_lower = document.lower().replace("_"," ")
-    word_count = 0
-    word_list = []
+# Function to clean and process text
+emoji_pattern = re.compile("["
+                           u"\U0001F600-\U0001F64F"
+                           u"\U0001F300-\U0001F5FF"
+                           u"\U0001F680-\U0001F6FF"
+                           u"\U0001F1E0-\U0001F1FF"
+                           u"\U00002702-\U000027B0"
+                           u"\U000024C2-\U0001F251"
+                           u"\U0001f926-\U0001f937"
+                           u'\U00010000-\U0010ffff'
+                           u"\u200d"
+                           u"\u2640-\u2642"
+                           u"\u2600-\u2B55"
+                           u"\u23cf"
+                           u"\u23e9"
+                           u"\u231a"
+                           u"\u3030"
+                           u"\ufe0f"
+                           "]+", flags=re.UNICODE)
 
+def clean_text(text):
+    text = text.lower()
+    text = re.sub(emoji_pattern, " ", text)
+    text = re.sub(r'([a-z]+?)\1+', r'\1', text)
+    text = re.sub(r"(\w)\s*([" + string.punctuation + "])\s*(\w)", r"\1 \2 \3", text)
+    text = re.sub(r"(\w)\s*([" + string.punctuation + "])", r"\1 \2", text)
+    text = re.sub(f"([{string.punctuation}])([{string.punctuation}])+", r"\1", text)
+    text = text.strip()
+    while text.endswith(tuple(string.punctuation + string.whitespace)):
+        text = text[:-1]
+    while text.startswith(tuple(string.punctuation + string.whitespace)):
+        text = text[1:]
+    text = text.translate(str.maketrans('', '', string.punctuation))
+    text = re.sub(r"\s+", " ", text)
+    text = word_tokenize(text, format="text")
+    return text
+
+# Function to find word counts and word lists
+def find_words_count(document, list_of_words):
+    document_lower = document.lower().replace("_", " ")
+    word_count = 0
     for word in list_of_words:
         if word in document_lower:
             word_count += document_lower.count(word)
-            word_list.append(word)
     return word_count
 
 def find_words_list(document, list_of_words):
-    document_lower = document.lower().replace("_"," ")
-    word_count = 0
+    document_lower = document.lower().replace("_", " ")
     word_list = []
-
     for word in list_of_words:
         if word in document_lower:
-            word_count += document_lower.count(word)
             word_list.append(word)
     return word_list
-# ---------------------------
-# function to process text
-emoji_pattern = re.compile("["
-                u"\U0001F600-\U0001F64F"
-                u"\U0001F300-\U0001F5FF"
-                u"\U0001F680-\U0001F6FF"
-                u"\U0001F1E0-\U0001F1FF"
-                u"\U00002702-\U000027B0"
-                u"\U000024C2-\U0001F251"
-                u"\U0001f926-\U0001f937"
-                u'\U00010000-\U0010ffff'
-                u"\u200d"
-                u"\u2640-\u2642"
-                u"\u2600-\u2B55"
-                u"\u23cf"
-                u"\u23e9"
-                u"\u231a"
-                u"\u3030"
-                u"\ufe0f"
-    "]+", flags=re.UNICODE) # Unicode emojis.
 
-def clean_text(text):
-    text = text.lower() # lowercase text
-
-    text = re.sub(emoji_pattern, " ", text) # remove emojis
-
-    text = re.sub(r'([a-z]+?)\1+',r'\1', text) # reduce repeated character (e.g. 'aaabbb' -> 'ab')
-
-    # Ensure space before and after any punctuation mark
-    text = re.sub(r"(\w)\s*([" + string.punctuation + "])\s*(\w)", r"\1 \2 \3", text)
-    text = re.sub(r"(\w)\s*([" + string.punctuation + "])", r"\1 \2", text)
-
-    text = re.sub(f"([{string.punctuation}])([{string.punctuation}])+",r"\1", text) # reduce consecutive punctuation
-
-    # Remove any leading or trailing spaces, or leading or trailing punctuation marks from the text
-    text = text.strip()
-    while text.endswith(tuple(string.punctuation+string.whitespace)):
-        text = text[:-1]
-    while text.startswith(tuple(string.punctuation+string.whitespace)):
-        text = text[1:]
-
-    text = text.translate(str.maketrans('', '', string.punctuation)) # remove all punctuation
-
-    text = re.sub(r"\s+", " ", text) # reduce multiple spaces
-
-    text = text_normalize(text) # make sure punctunation is in the right letter (Vietnamese case)
-    text = word_tokenize(text, format="text") # tokenize the cleaned text
-    # text = unidecode(text) # remove accent marks from sentences (no significant difference when accent marks is removed or kept)
-    return text
-
-# ---------------------------
-# GUI
+# Streamlit GUI
 st.title("Data Science Project")
 st.image("background_1.jpg")
 
-# ---------------------------
 # GUI Menu
 menu = ["Trang chủ", "Thống kê sàn", "Thống kê cửa hàng", "Dự đoán ngữ nghĩa"]
 choice = st.sidebar.selectbox('Menu', menu)
 
-# ---------------------------
-if choice == 'Trang chủ':    
+# Main logic based on menu choice
+if choice == 'Trang chủ':
     st.subheader("Giới thiệu")
     st.write("Trang web hỗ trợ các tính năng sau: ")
     st.markdown("- Thống kê mô tả về tình hình hoạt động của sàn thương mại điện tử")
@@ -329,322 +305,167 @@ if choice == 'Trang chủ':
 
 elif choice == "Thống kê sàn":
     st.subheader("Thống kê sàn")
-    df_rev = None
-    df_res = None
-    df_res = uploaded_file_rs #pd.read_csv(uploaded_file_rs)
-    # global lines
-    st.dataframe(df_res)
-    # -------------------------------------
-    st.title('Restaurant Distribution by District')
-    # Vẽ biểu đồ bằng matplotlib và seaborn
-    plt.figure(figsize=(10, 6))
-    sns.countplot(x='District', data=df_res)
-    plt.title('Number of Restaurant in Each District')
-    plt.xlabel('District')
-    plt.ylabel('Number of Restaurant')
-    # Hiển thị biểu đồ trong Streamlit
-    st.pyplot(plt)
-    #-------------------------------------
-    # Thiết lập giao diện Streamlit
-    st.title('Distribution of Average Price')
-    # Vẽ biểu đồ histogram bằng matplotlib và seaborn
-    plt.figure(figsize=(10, 6))
-    sns.histplot(df_res['avg_price'], bins=20, kde=True)
-    plt.title('Distribution of Average Price')
-    plt.xlabel('Average Price')
-    plt.ylabel('Frequency')
-    # Hiển thị biểu đồ trong Streamlit
-    st.pyplot(plt)
-    #-------------------------------------
-    # Thiết lập giao diện Streamlit
-    st.title('Average Price of Each District')
-    # Vẽ biểu đồ boxplot bằng matplotlib và seaborn
-    plt.figure(figsize=(10, 6))
-    sns.boxplot(x='District', y='avg_price', data=df_res)
-    plt.title('Average Price of Each District')
-    plt.xlabel('District')
-    plt.ylabel('Average Price')
-    # Hiển thị biểu đồ trong Streamlit
-    st.pyplot(plt)
-    #-------------------------------------
-    # Tính tổng số lượng comment ở mỗi cột
-    st.title('Comment Type')
-    totals = df_res[['negative_deliver', 'negative_food', 'negative_price', 'negative_staff', 'negative_store',
-                    'neutral_deliver', 'neutral_food', 'neutral_price', 'neutral_staff', 'neutral_store',
-                    'positive_deliver', 'positive_food', 'positive_price', 'positive_staff', 'positive_store']].sum()
-    totals_df = totals.reset_index()
-    totals_df.columns = ['Comment Type', 'Count']
-    # Tạo biểu đồ cột bằng altair với tỷ lệ logarit
-    bars = alt.Chart(totals_df).mark_bar().encode(
-        x=alt.X('Comment Type', sort=None, axis=alt.Axis(labelAngle=90)),
-        y=alt.Y('Count', scale=alt.Scale(type='log'))
-    ).properties(
-        title='Comment type',
-        width=600,
-        height=400
-    )
-    # Thêm nhãn giá trị vào các thanh
-    text = bars.mark_text(
-        align='center',
-        baseline='bottom',
-        dy=-5,  # Move text slightly above the bar
-        color='white'
-    ).encode(
-        text='Count:Q'
-    )
-    chart = bars + text
-    # Hiển thị biểu đồ trong Streamlit
-    st.altair_chart(chart, use_container_width=True)
-
-elif choice == 'Thống kê cửa hàng':
-    st.subheader("Thống kê cửa hàng")
-    df_res = None
-    df_res = uploaded_file_rs
-    st.dataframe(df_res)
-    selected_res = st.text_input(label="Input ShopID: ")
-    if selected_res: 
-        # selected_res = int(selected_res)
-        def show_res(selected_res):
-            res = df_res[df_res['ID']==selected_res]
-            return res
-        def show_rev(selected_res):
-            rev = df_rev[df_rev['IDRestaurant']== selected_res]
-            return rev
-        res = show_res(int(selected_res))
-        rev = show_rev(int(selected_res))
-        # Hiển thị thông tin nhà hàng
-        st.write("### Cửa hàng: ", res["Restaurant"].iloc[0])
-        st.write("**Địa chỉ:** ", res["Address"].iloc[0])
-        st.write("**Giá món:** ", res["Price"].iloc[0])
-        st.write("**Đánh giá:** ", round(res["Rating"].iloc[0],2))
-        # Tính tổng số lượng comment ở mỗi cột
-        res_comt = res[['negative_deliver', 'negative_food', 'negative_price', 'negative_staff', 'negative_store',
-                        'neutral_deliver', 'neutral_food', 'neutral_price', 'neutral_staff', 'neutral_store',
-                        'positive_deliver', 'positive_food', 'positive_price', 'positive_staff', 'positive_store']].sum()
-
-        # Tạo DataFrame mới từ tổng số lượng comment
-        totals_df = res_comt.reset_index()
-        totals_df.columns = ['Comment Type', 'Count']
+    uploaded_file_rs = st.file_uploader("Upload your file here", type=["csv"])
+    
+    if uploaded_file_rs:
+        df_res = pd.read_csv(uploaded_file_rs)
+        st.dataframe(df_res)
         
-        st.write("### Review Data")
-        st.dataframe(rev)
-        # Tạo biểu đồ cột bằng altair với tỷ lệ logarit
+        st.title('Restaurant Distribution by District')
+        plt.figure(figsize=(10, 6))
+        sns.countplot(x='District', data=df_res)
+        plt.title('Number of Restaurants in Each District')
+        plt.xlabel('District')
+        plt.ylabel('Number of Restaurants')
+        st.pyplot(plt)
+
+        st.title('Distribution of Average Price')
+        plt.figure(figsize=(10, 6))
+        sns.histplot(df_res['avg_price'], bins=20, kde=True)
+        plt.title('Distribution of Average Price')
+        plt.xlabel('Average Price')
+        plt.ylabel('Frequency')
+        st.pyplot(plt)
+
+        st.title('Average Price of Each District')
+        plt.figure(figsize=(10, 6))
+        sns.boxplot(x='District', y='avg_price', data=df_res)
+        plt.title('Average Price of Each District')
+        plt.xlabel('District')
+        plt.ylabel('Average Price')
+        st.pyplot(plt)
+
+        st.title('Comment Type')
+        totals = df_res[['negative_deliver', 'negative_food', 'negative_price', 'negative_staff', 'negative_store',
+                         'neutral_deliver', 'neutral_food', 'neutral_price', 'neutral_staff', 'neutral_store',
+                         'positive_deliver', 'positive_food', 'positive_price', 'positive_staff', 'positive_store']].sum()
+        totals_df = totals.reset_index()
+        totals_df.columns = ['Comment Type', 'Count']
         bars = alt.Chart(totals_df).mark_bar().encode(
             x=alt.X('Comment Type', sort=None, axis=alt.Axis(labelAngle=90)),
-            y=alt.Y('Count', scale=alt.Scale(type='linear')),
-            color=alt.condition(
-                alt.datum.Count > 0,
-                alt.value('steelblue'), 
-                alt.value('lightgray')
-            )
+            y=alt.Y('Count', scale=alt.Scale(type='log'))
         ).properties(
             title='Comment type',
             width=600,
             height=400
         )
-
-        # Thêm nhãn giá trị vào các thanh với màu trắng
         text = bars.mark_text(
             align='center',
-            baseline='middle',
-            dy=-10,  # Di chuyển nhãn lên trên một chút
-            color='white'  # Màu chữ trắng
+            baseline='bottom',
+            dy=-5,
+            color='white'
         ).encode(
             text='Count:Q'
         )
-
-        # Kết hợp biểu đồ và nhãn
         chart = bars + text
-
-        # Hiển thị biểu đồ trong Streamlit
         st.altair_chart(chart, use_container_width=True)
 
-        # Tạo WORD CLOUD của corpus
-        all_words = [token for token in rev['corpus'].tolist() if token and token != '']
+elif choice == 'Thống kê cửa hàng':
+    st.subheader("Thống kê cửa hàng")
+    uploaded_file_rs = st.file_uploader("Upload your file here", type=["csv"])
 
-        corpus = ' '.join(all_words)
-        all_words_freq = nltk.FreqDist(all_words)
+    if uploaded_file_rs:
+        df_res = pd.read_csv(uploaded_file_rs)
+        st.dataframe(df_res)
+        selected_res = st.text_input(label="Input ShopID: ")
 
-        negative_list = []
-        for sublist in rev['negative_list']:
-            negative_list.append(sublist.replace("'", "").replace("[", "").replace("]", ""))
-        
-        negative_text = ' '.join(negative_list)
-
-        p_list = []
-        for sublist in rev['positive_list']:
-            p_list.append(sublist.replace("'", "").replace("[", "").replace("]", ""))
-        
-        p_text = ' '.join(p_list)
-        st.markdown("---")
-        # Print the total number of words and the 15 most common words
-        st.write('### Wordcloud')
-        st.write('**Number of reviews: {}**'.format(len(all_words_freq)))
-
-        # Tạo và hiển thị Word Cloud
-        st.write('**Positive Wordcloud:**')
-        word_cloud1 = WordCloud(max_words=100, background_color = 'white',
-                            width=2000, height=1000).generate(p_text)
-        # Hiển thị Word Cloud
-        plt.figure(figsize=(12, 8))
-        plt.axis("off")
-        plt.imshow(word_cloud1, interpolation='bilinear')
-        st.pyplot(plt)
-
-
-        # Tạo và hiển thị Word Cloud
-        st.write('**Negative Wordcloud:**')
-        word_cloud = WordCloud(max_words=100, background_color = 'white',
-                            width=2000, height=1000).generate(negative_text)
-        
-
-        # Hiển thị Word Cloud
-        plt.figure(figsize=(12, 8))
-        plt.axis("off")
-        plt.imshow(word_cloud, interpolation='bilinear')
-        st.pyplot(plt)
-        
-        
-        
-        def pnr_level(df):
-            if (df['Positive'] == 0) & (df['Negative'] == 0):
-                return 'Unidentified'
+        if selected_res:
+            selected_res = int(selected_res)
             
-            elif df['PNR_Score'] >= 10:
-                return 'Very satisfied'
+            def show_res(selected_res):
+                res = df_res[df_res['ID'] == selected_res]
+                return res
+
+            def show_rev(selected_res):
+                rev = df_rev[df_rev['IDRestaurant'] == selected_res]
+                return rev
+
+            res = show_res(selected_res)
+            rev = show_rev(selected_res)
+
+            st.write("### Cửa hàng: ", res["Restaurant"].iloc[0])
+            st.write("**Địa chỉ:** ", res["Address"].iloc[0])
+            st.write("**Giá món:** ", res["Price"].iloc[0])
+            st.write("**Đánh giá:** ", round(res["Rating"].iloc[0], 2))
+
+            res_comt = res[['negative_deliver', 'negative_food', 'negative_price', 'negative_staff', 'negative_store',
+                            'neutral_deliver', 'neutral_food', 'neutral_price', 'neutral_staff', 'neutral_store',
+                            'positive_deliver', 'positive_food', 'positive_price', 'positive_staff', 'positive_store']].sum()
+
+            totals_df = res_comt.reset_index()
+            totals_df.columns = ['Comment Type', 'Count']
+            st.write("### Review Data")
+            st.dataframe(rev)
             
-            elif df['P'] >= 4 and df['N'] >= 4 and df['R'] <= 2:
-                return 'Contradict Negative'
-            
-            elif df['P'] <= 3 and df['N'] <= 3 and df['R'] >= 3:
-                return 'Contradict Positive'
+            bars = alt.Chart(totals_df).mark_bar().encode(
+                x=alt.X('Comment Type', sort=None, axis=alt.Axis(labelAngle=90)),
+                y=alt.Y('Count', scale=alt.Scale(type='linear')),
+                color=alt.condition(
+                    alt.datum.Count > 0,
+                    alt.value('steelblue'),
+                    alt.value('lightgray')
+                )
+            ).properties(
+                title='Comment type',
+                width=600,
+                height=400
+            )
+            text = bars.mark_text(
+                align='center',
+                baseline='middle',
+                dy=-10,
+                color='white'
+            ).encode(
+                text='Count:Q'
+            )
+            chart = bars + text
+            st.altair_chart(chart, use_container_width=True)
 
-            elif df['PNR_Score'] <= 7:
-                return 'Not satisfied'
-            
-            else:
-                return 'Normal'
-            
-        # Score range
-        po_labels = range(1, 6)
-        ne_labels = range(5, 0, -1)
-        r_labels = range(1, 6)
+            all_words = [token for token in rev['corpus'].tolist() if token and token != '']
+            corpus = ' '.join(all_words)
+            all_words_freq = nltk.FreqDist(all_words)
 
-        mask = (rev['positive_count'] == 0) & (rev['negative_count'] == 0)
-        df_pnr = rev[~mask]
-        # Check for NaN values
-        if df_pnr['positive_count'].isnull().any():
-            st.write("### Error!")
-            st.write("NaN values found in 'positive_count' column")
+            negative_list = [sublist.replace("'", "").replace("[", "").replace("]", "") for sublist in rev['negative_list']]
+            negative_text = ' '.join(negative_list)
 
-        # Check the number of unique values
-        unique_values_p = df_pnr['positive_count'].nunique()
-        unique_values_n = df_pnr['positive_count'].nunique()
-        if unique_values_p < 5:
-            st.write("### Warning!")
-            st.write(f"Không đủ dữ liệu để thực hiện phân cụm khách hàng!")
+            p_list = [sublist.replace("'", "").replace("[", "").replace("]", "") for sublist in rev['positive_list']]
+            p_text = ' '.join(p_list)
 
-        elif unique_values_n < 5:
-            st.write("### Warning!")
-            st.write(f"Không đủ dữ liệu để thực hiện phân cụm khách hàng!")
-
-
-        else:
-            # Assign these labels to 4 equal percentile groups
-            p_groups = pd.qcut(df_pnr['positive_count'].rank(method='first'), q=5, labels=po_labels)
-
-            n_groups = pd.qcut(df_pnr['negative_count'].rank(method='first'), q=5, labels=ne_labels)
-
-            r_groups = pd.qcut(df_pnr['Rating'].rank(method='first'), q=5, labels=r_labels)
-
-            df_pnr = df_pnr.assign(P = p_groups.values, N = n_groups.values,  R = r_groups.values)
-
-            # Join the score
-            def join_rfm(x): return str(int(x['P'])) + str(int(x['N'])) + str(int(x['R']))
-            df_pnr['PNR_Segment'] = df_pnr.apply(join_rfm, axis=1)
-            df_pnr['PNR_Score'] = df_pnr[['P','N','R']].sum(axis=1)
-
-
-            def pnr_level(df):
-                # Check for special 'STARS' and 'NEW' conditions first
-                if (df['positive_count'] == 0) & (df['negative_count'] == 0):
-                    return 'Unidentified'
-                
-                elif df['PNR_Score'] >= 10:
-                    return 'Very satisfied'
-                
-                elif df['P'] >= 4 and df['N'] >= 4 and df['R'] <= 2:
-                    return 'Contradict Negative'
-                
-                elif df['P'] <= 3 and df['N'] <= 3 and df['R'] >= 3:
-                    return 'Contradict Positive'
-
-                elif df['PNR_Score'] <= 7:
-                    return 'Not satisfied'
-                
-                else:
-                    return 'Normal'
-                
-            df_pnr['PNR_Level'] = df_pnr.apply(pnr_level, axis=1)
-            df_pnr['PNR_Level'].value_counts()
-
-            pnr_agg = df_pnr.groupby('PNR_Level').agg({
-                'positive_count': 'mean',
-                'negative_count': 'mean',
-                'Rating': ['mean', 'count']
-            })
-            pnr_agg[('positive_count', 'mean')] = pnr_agg[('positive_count', 'mean')].round(0)
-            pnr_agg[('negative_count', 'mean')] = pnr_agg[('negative_count', 'mean')].round(0)
-
-            pnr_agg.columns = pnr_agg.columns.droplevel()
-            pnr_agg.columns = ['PositiveMean','NegativeMean','RatingMean', 'Count']
-            pnr_agg['Percent'] = round((pnr_agg['Count']/pnr_agg.Count.sum())*100, 2)
-
-            # Reset the index
-            pnr_agg = pnr_agg.reset_index()
             st.markdown("---")
-            st.write('### Customer Segmentation:')
-            st.write("**Very satisfied: Khách hàng thích** ")
-            st.write("**Not satisfied: Khách hàng ghét** ")
-            st.write("**Neutral: Bình thường** ")
-            st.write("**Contradict positive: Khen ít chê nhiều nhưng điểm cao** ")
-            st.write("**Contradict negative: Khen nhiều chê ít nhưng điểm thấp** ")
+            st.write('### Wordcloud')
+            st.write('**Number of reviews: {}**'.format(len(all_words_freq)))
 
-
-            plt.clf()
-            fig1 = plt.gcf()
-            ax = fig1.add_subplot()
-            fig1.set_size_inches(15, 10)
-
-            colors_dict = {0: 'yellow', 1: 'royalblue', 2: 'cyan', 3: 'pink', 4: 'green', 5: 'red'}
-
-            squarify.plot(sizes=pnr_agg['Count'],
-                        text_kwargs={'fontsize': 12, 'weight': 'bold', 'fontname': "sans serif"},
-                        color=colors_dict.values(),
-                        label=['{} \n{:.0f} positives \n{:.0f} negatives \n rating {:.2f} \n{:.0f} ({}%)'.format(*pnr_agg.iloc[i])
-                                for i in range(0, len(pnr_agg))], alpha=0.5)
-
-            plt.title("Reviewers Segments", fontsize=26, fontweight="bold")
+            st.write('**Positive Wordcloud:**')
+            word_cloud1 = WordCloud(max_words=500, background_color='white', scale=3).generate(p_text)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.imshow(word_cloud1)
             plt.axis('off')
+            st.pyplot(fig)
 
-            # Display the plot
-            st.pyplot(fig1)
-            
+            st.write('**Negative Wordcloud:**')
+            word_cloud2 = WordCloud(max_words=500, background_color='white', scale=3).generate(negative_text)
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.imshow(word_cloud2)
+            plt.axis('off')
+            st.pyplot(fig)
 
-
-
-'''elif choice == 'Dự đoán ngữ nghĩa':
+elif choice == 'Dự đoán ngữ nghĩa':
     st.subheader("Dự đoán ngữ nghĩa")
-    selected_text = st.text_input(label = "Nhập cảm nghĩ của quý khách: ")
+    selected_text = st.text_input(label="Nhập cảm nghĩ của quý khách: ")
+
     if selected_text:
-        
         st.write("Kết quả dự đoán: ")
-        # Example of making a prediction
         new_comments = [selected_text]
+
+        # Load your vectorizer and model here
+        # vectorizer = joblib.load('tfidf_vectorizer.pkl')
+        # loaded_model = joblib.load('logistic_regression_model.pkl')
+
         new_X = vectorizer.transform(new_comments)
         predictions = loaded_model.predict(new_X)
 
-        # Map numerical labels back to sentiment labels
         label_map = {1: 'Hài lòng', 0: 'Không hài lòng'}
         predicted_labels = label_map[predictions[0]]
-        st.write(predicted_labels)'''
+
+        st.write(predicted_labels)
+
