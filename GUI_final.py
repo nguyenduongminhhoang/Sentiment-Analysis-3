@@ -43,7 +43,7 @@ joblib_file = "logistic_regression_model.pkl"
 loaded_model = joblib.load(joblib_file)
 # Convert the text data to numerical vectors
 vectorizer = TfidfVectorizer(analyzer='word', min_df=0, stop_words=stopwords_lst)
-vectorizer.fit_transform(df_PNR['Comment'])
+vectorizer.fit_transform(df_PNR['Comment'].tolist())
 
 level_extreme_words = [
     "rất", "khủng khiếp", "quá", "siêu", "cực kỳ", "rất nhiều", "vô cùng", "tuyệt đối", "hoàn toàn",
