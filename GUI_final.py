@@ -14,18 +14,15 @@ import seaborn as sns
 import altair as alt
 from wordcloud import WordCloud
 import nltk
-import regex as re
 import string
 from underthesea import word_tokenize
 from underthesea import text_normalize
-from collections import Counter
 
 import squarify
 
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
-import pandas as pd
 # ---------------------------
 uploaded_file_rs = pd.read_csv("data/df_res.csv")
 df_rev1 = pd.read_csv("data/df_rev1.csv")
