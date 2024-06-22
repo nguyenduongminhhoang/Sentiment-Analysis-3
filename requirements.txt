@@ -4,7 +4,6 @@ matplotlib
 nltk == 3.7
 numpy
 pandas
-regex == 2022.9.13
 scikit-learn == 1.1.2
 seaborn
 streamlit == 1.35.0
